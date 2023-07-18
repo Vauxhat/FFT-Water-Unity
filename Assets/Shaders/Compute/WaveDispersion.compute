@@ -1,0 +1,45 @@
+#define M_PI 3.14159265358979323846
+
+#pragma kernel ComputeDispersion
+
+// Read-write textures.
+RWTexture2D<float> _waveDispersion;
+
+// Input variables.
+float _gravity;
+float _repeatTime;
+float _textureSize;
+float _patchSize;
+
+[numthreads(8,8,1)]
+void ComputeDispersion (uint2 id : SV_DispatchThreadID)
+{
+    // Calculate x and y components of k vector.
+    float kx = M_PI * (2.0f * id.x - _textureSize) / _patchSize;
+    float ky = M_PI * (2.0f * id.y - _textureSize) / _patchSize;
+
+    // Calculate the length of the wave vector.
+    float kLength = sqrt(kx * kx + ky * ky);
+
+    // Calculate wave dispersion based on length and gravity.
+    float dispersion = _gravity * kLength;
+
+    // Set scale value to 1cm.
+    float L = 0.01f;
+
+    // Check if wave length is less than 1cm.
+    if (kLength < L)
+    {
+        // Modify dispersion relation, accomodate for surface tension.
+        dispersion *= (1.0f + kLength * kLength * L * L);
+    }
+
+    // Extract dispersion (w) from squared value.
+    dispersion = sqrt(dispersion);
+
+    // Calculate the basic wave frequency.
+    float baseFrequency = (2.0f * M_PI) / _repeatTime;
+
+    // Calculate final dispersion value, ensuring wave frequency is a multiple of the base frequency.
+    _waveDispersion[id] = floor(dispersion / baseFrequency) * baseFrequency;
+}

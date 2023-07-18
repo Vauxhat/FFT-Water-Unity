@@ -1,0 +1,58 @@
+#pragma kernel ComputeDisplacement
+#pragma kernel ComputeSurfaceNormal
+
+// Input textures.
+Texture2D<float2> _displacementX;
+Texture2D<float2> _displacementY;
+Texture2D<float2> _displacementZ;
+
+Texture2D<float2> _normalX;
+Texture2D<float2> _normalZ;
+
+// Output textures.
+RWTexture2D<float4> _displacement;
+RWTexture2D<float4> _surfaceNormal;
+
+// Input variables.
+float _lambda;
+
+static const float signs[2] = { 1.0f, -1.0f };
+
+[numthreads(8,8,1)]
+void ComputeDisplacement(uint2 id : SV_DispatchThreadID)
+{
+    float3 displacement;
+
+    // Get sign value for current pixel.
+    float sign = signs[(id.x + id.y) % 2];
+
+    // Calculate displacement based on FFT results, apply chop.
+    displacement.x = sign * _displacementX[id].x * _lambda;
+    displacement.y = sign * _displacementY[id].x;
+    displacement.z = sign * _displacementZ[id].x * _lambda;
+
+    // Store result in output texture.
+    _displacement[id] = float4(displacement, 1.0f);
+}
+
+[numthreads(8, 8, 1)]
+void ComputeSurfaceNormal(uint2 id : SV_DispatchThreadID)
+{
+    float3 normal;
+
+    // Get sign value for current pixel.
+    float sign = signs[(id.x + id.y) % 2];
+
+    // Determine unscaled surface normal based on FFT results.
+    normal.x = -1.0f * (_normalX[id].x * sign);
+    normal.y = -1.0f * (_normalZ[id].x * sign);
+    normal.z = 1.0f;
+
+    // Calculate final value.
+    normal = normalize(normal);
+
+    //normal = 0.5f * (normal + float3(1.0f, 1.0f, 1.0f));
+
+    // Store result in output texture.
+    _surfaceNormal[id] = float4(normal, 1.0f);
+}

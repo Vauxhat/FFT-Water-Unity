@@ -1,0 +1,87 @@
+#define M_PI 3.14159265358979323846
+
+#pragma kernel ComputeNoise
+#pragma kernel ComputeStationary
+
+// Texture variables.
+Texture2D<float4> _gaussianNoise;
+RWTexture2D<float4> _stationarySpectrum;
+
+// Input variables.
+float _windX;
+float _windY;
+float _windSpeed;
+float _gravity;
+float _minWavelength;
+float _phillipsConstant;
+int _textureSize;
+int _patchSize;
+
+// Returns the conjugate value of a complex number.
+float2 ComplexConjugate(float2 a)
+{
+    return float2(a.x, -a.y);
+}
+
+// Returns the phillips spectrum of a wave vector.
+float PhillipsSpectrum(float2 k)
+{
+    // Initialise phillips spectrum.
+    float phillipsSpectrum = 0.0f;
+
+    // Calculate the length of the vector k.
+    float wavelength = length(k);
+
+    // Check if wavelength is greater than minimum.
+    if (wavelength > _minWavelength)
+    {
+        // Calculate L factor (Squared wind speed divided by gravity).
+        float L = (_windSpeed * _windSpeed) / _gravity;
+
+        // Calculate normalized value for k, store as local variable.
+        float2 waveDirection = k / wavelength;
+
+        // Calculate wavelength to the power of four.
+        float k2 = wavelength * wavelength;
+        float k4 = k2 * k2;
+
+        float kL2 = k2 * L * L;
+
+        // Calculate the dot product of the wave direction and wind direction.
+        float dotProduct = dot(waveDirection, float2(_windX, _windY));
+
+        // Calculate squared dot product, increasing the power increases directional dependency of waves.
+        dotProduct = dotProduct * dotProduct * dotProduct * dotProduct * dotProduct * dotProduct;
+
+        // Calculate suppression. This should suppress waves at lower wavelenghts.
+        float suppression = exp(-1.0f * k2 * _minWavelength * _minWavelength);
+
+        // Calculate factor from phillips spectrum.
+        phillipsSpectrum = _phillipsConstant * (exp(-1.0f / kL2) / k4) * dotProduct * suppression;
+    }
+
+    return phillipsSpectrum;
+}
+
+[numthreads(8, 8, 1)]
+void ComputeNoise(uint2 id : SV_DispatchThreadID)
+{
+    // Possible GPU noise generation.
+}
+
+[numthreads(8,8,1)]
+void ComputeStationary(uint2 id : SV_DispatchThreadID)
+{
+    float2 k;
+
+    // Calculate the wave vector.
+    k.x = M_PI * (2.0f * id.x - _textureSize) / _patchSize;
+    k.y = M_PI * (2.0f * id.y - _textureSize) / _patchSize;
+
+    // Calculate ~h0 and ~h*.
+    float2 tildeH0 = _gaussianNoise[id].rg * sqrt(PhillipsSpectrum(k) * 0.5f);
+    float2 tildeH0Conjugate = ComplexConjugate(_gaussianNoise[id].ba * sqrt(PhillipsSpectrum(-k) * 0.5f));
+
+    // Store final output in texture.
+    _stationarySpectrum[id] = float4(tildeH0.x, tildeH0.y, tildeH0Conjugate.x, tildeH0Conjugate.y);
+}

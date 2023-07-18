@@ -1,0 +1,68 @@
+#define M_PI 3.14159265358979323846
+
+#pragma kernel ComputeTimeSpectrum
+
+// Read-write textures.
+RWTexture2D<float2> _timeSpectrumX;
+RWTexture2D<float2> _timeSpectrumY;
+RWTexture2D<float2> _timeSpectrumZ;
+
+RWTexture2D<float2> _slopeX;
+RWTexture2D<float2> _slopeZ;
+
+// Read only textures.
+Texture2D<float4> _stationarySpectrum;
+Texture2D<float> _waveDispersion;
+
+// Input variables.
+float _time;
+float _textureSize;
+float _patchSize;
+
+// Multiplies two float2 values as though they were complex variables.
+float2 ComplexMultiply(float2 a, float2 b)
+{
+    return float2(a.x * b.x - a.y * b.y, a.x * b.y + a.y * b.x);
+}
+
+[numthreads(8,8,1)]
+void ComputeTimeSpectrum (uint2 id : SV_DispatchThreadID)
+{
+    // Calculate x and y components of k vector.
+    float kx = M_PI * (2.0f * id.x - _textureSize) / _patchSize;
+    float ky = M_PI * (2.0f * id.y - _textureSize) / _patchSize;
+
+    // Calculate wavelength of k vector.
+    float wavelength = sqrt(kx * kx + ky * ky);
+
+    // Calculate time factor.
+    float exponent = _waveDispersion[id] * _time;
+
+    // Calculate ~h0 and conjugate using stationary spectrum, seed based on time.
+    float2 tildeh0 = ComplexMultiply(_stationarySpectrum[id].xy, float2(cos(exponent), sin(exponent)));
+    float2 tildeh0i = ComplexMultiply(_stationarySpectrum[id].zw, float2(cos(exponent), sin(-exponent)));
+
+    // Calculate ~h from composite variables.
+    float2 tildeh = tildeh0 + tildeh0i;
+
+    // Set height component of time spectrum.
+    _timeSpectrumY[id] = tildeh;
+
+    // Make sure wavelength is a non-zero number, avoid division error.
+    if (wavelength < 0.000001f)
+    {
+        // Set displacement to zero.
+        _timeSpectrumX[id] = float2(0.0f, 0.0f);
+        _timeSpectrumZ[id] = float2(0.0f, 0.0f);
+    }
+    else
+    {
+        // Set x and y components of time spectrum.
+        _timeSpectrumX[id] = ComplexMultiply(tildeh, float2(0.0f, -kx / wavelength));
+        _timeSpectrumZ[id] = ComplexMultiply(tildeh, float2(0.0f, -ky / wavelength));
+    }
+
+    // Calculate slope component of time spectrum.
+    _slopeX[id] = ComplexMultiply(tildeh, float2(0.0f, kx));
+    _slopeZ[id] = ComplexMultiply(tildeh, float2(0.0f, ky));
+}

@@ -1,0 +1,7 @@
+Lantz, K. (2011). Ocean Simulation Part Two: Using the Fast Fourier Transform. [online] keithlantz.net. Available at: https://www.keithlantz.net/2011/11/ocean-simulation-part-two-using-the-fast-fourier-transform [Accessed 18/07/2023]
+Flügge, F. (2017). Realtime GPGPU FFT Ocean Water Simulation. Hamburg University of Technology: Hamburg
+Tessendorf, J. (2001). Simulating Ocean Water. [online] people.computing.clemson.edu. Available at: https://people.computing.clemson.edu/~jtessen/reports/papers_files/coursenotes2004.pdf [Accessed 18/07/2023]
+Tcheblokov, T. (2015). Ocean Simulation and Rendering in War Thunder. [online] developer.download.nvidia.com Available at: https://developer.download.nvidia.com/assets/gameworks/downloads/regular/events/cgdc15/CGDC2015_ocean_simulation_en.pdf [Accessed 18/07/2023]
+Cooley–Tukey FFT algorithm. (2023). Wikipedia. [online] en.wikipedia.org. Available at: https://en.wikipedia.org/wiki/Cooley%E2%80%93Tukey_FFT_algorithm
+https://www.youtube.com/watch?v=i0BPrGuOdPo
+https://www.youtube.com/watch?v=kGEqaX4Y4bQ

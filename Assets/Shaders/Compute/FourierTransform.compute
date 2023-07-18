@@ -1,0 +1,129 @@
+#pragma kernel ComputeFourierTransform
+
+// Textures variables.
+RWTexture2D<float2> _buffer0, _buffer1;
+Texture2D<float4> _butterflyTexture;
+
+// Input variables.
+bool _direction;
+int _pingpong;
+int _stage;
+
+// Multiplies two float2 values as though they were complex variables.
+float2 ComplexMultiply(float2 a, float2 b)
+{
+    return float2(a.x * b.x - a.y * b.y, a.x * b.y + a.y * b.x);
+}
+
+void HorizontalPass(uint2 id : SV_DispatchThreadID)
+{
+    // Sample butterfly texture for current stage.
+    float4 butterflySample = _butterflyTexture[int2(_stage, id.x)];
+
+    // Get twiddle factorfrom buttrfly texture.
+    float2 twiddleFactor = butterflySample.rg;
+
+    if (_pingpong == 0)
+    {
+        // Sample complex values from buffer, use butterfly texture for top and bottom index.
+        float2 a = _buffer0[int2(butterflySample.b, id.y)];
+        float2 b = _buffer0[int2(butterflySample.a, id.y)];
+
+        // Calculate output value.
+        _buffer1[id.xy] = a + ComplexMultiply(b, twiddleFactor);
+    }
+    else
+    {
+        // Sample complex values from buffer, use butterfly texture for top and bottom index.
+        float2 a = _buffer1[int2(butterflySample.b, id.y)];
+        float2 b = _buffer1[int2(butterflySample.a, id.y)];
+
+        // Calculate output value.
+        _buffer0[id.xy] = a + ComplexMultiply(b, twiddleFactor);
+    }
+}
+
+void VerticalPass(uint2 id : SV_DispatchThreadID)
+{
+    // Sample butterfly texture for current stage.
+    float4 butterflySample = _butterflyTexture[int2(_stage, id.y)];
+
+    // Get twiddle factorfrom buttrfly texture.
+    float2 twiddleFactor = butterflySample.rg;
+
+    if (_pingpong == 0)
+    {
+        // Sample complex values from buffer, use butterfly texture for top and bottom index.
+        float2 a = _buffer0[int2(id.x, butterflySample.b)];
+        float2 b = _buffer0[int2(id.x, butterflySample.a)];
+
+        // Calculate output value.
+        _buffer1[id.xy] = a + ComplexMultiply(b, twiddleFactor);
+    }
+    else
+    {
+        // Sample complex values from buffer, use butterfly texture for top and bottom index.
+        float2 a = _buffer1[int2(id.x, butterflySample.b)];
+        float2 b = _buffer1[int2(id.x, butterflySample.a)];
+
+        // Calculate output value.
+        _buffer0[id.xy] = a + ComplexMultiply(b, twiddleFactor);
+    }
+}
+
+/*[numthreads(8, 8, 1)]
+void ComputeButterfly(uint2 id : SV_DispatchThreadID)
+{
+    // Calculate 2 to the power of x + 1, use bit shifting for simpler operation.
+    int pow = 2 << id.x;
+
+    // Calculate complex root of unity using k.
+    int k = id.y * (_textureSize / pow) % _textureSize;
+    float twiddleFactor = (2.0f * M_PI * k) / _textureSize;
+
+    // Calculate butterfly span using 2 to the power of x, use bit shifting for simpler operation.
+    int butterflySpan = 1 << id.x;
+
+    // Check if this is the first butterfly stage.
+    if (id.x == 0)
+    {
+        // Check whether pixel is at the top or bottom of butterfly.
+        if ((y % pow) < butterflySpan)
+        {
+            // Store twiddle factor in texture using top index configuration, apply bit reversal.
+            _butterflyTexture[id] = float4(cos(twiddleFactor), sin(twiddleFactor), _reversedIndex[id.y], _reversedIndex[id.y + 1]);
+        }
+        else
+        {
+            // Store twiddle factor in texture using bottom index configuration, apply bit reversal.
+            _butterflyTexture[id] = float4(cos(twiddleFactor), sin(twiddleFactor), _reversedIndex[id.y - 1], _reversedIndex[id.y]);
+        }
+    }
+    else
+    {
+        // Check whether pixel is at the top or bottom of butterfly.
+        if ((y % pow) < butterflySpan)
+        {
+            // Store twiddle factor in texture using top index configuration.
+            _butterflyTexture[id] = float4(cos(twiddleFactor), sin(twiddleFactor), id.y, id.y + butterflySpan);
+        }
+        else
+        {
+            // Store twiddle factor in texture using bottom index configuration.
+            _butterflyTexture[id] = float4(cos(twiddleFactor), sin(twiddleFactor), id.y - butterflySpan, id.y);
+        }
+    }
+}*/
+
+[numthreads(8, 8, 1)]
+void ComputeFourierTransform(uint2 id : SV_DispatchThreadID)
+{
+    if (_direction)
+    {
+        VerticalPass(id);
+    }
+    else
+    {
+        HorizontalPass(id);
+    }
+}
