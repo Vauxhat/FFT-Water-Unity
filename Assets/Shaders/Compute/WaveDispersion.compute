@@ -25,13 +25,13 @@ void ComputeDispersion (uint2 id : SV_DispatchThreadID)
     float dispersion = _gravity * kLength;
 
     // Set scale value to 1cm.
-    float L = 0.01f;
+    float scale = 0.01f;
 
-    // Check if wave length is less than 1cm.
-    if (kLength < L)
+    // Check if wave length is less than scale.
+    if (kLength < scale)
     {
         // Modify dispersion relation, accomodate for surface tension.
-        dispersion *= (1.0f + kLength * kLength * L * L);
+        dispersion *= (1.0f + kLength * kLength * scale * scale);
     }
 
     // Extract dispersion (w) from squared value.

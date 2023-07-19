@@ -137,6 +137,7 @@ GameObject:
   - component: {fileID: 69210486}
   - component: {fileID: 69210484}
   - component: {fileID: 69210490}
+  - component: {fileID: 69210491}
   m_Layer: 0
   m_Name: Plane (1)
   m_TagString: Untagged
@@ -246,7 +247,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 69210483}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 329e03d34f269054980497aaf84e1c30, type: 3}
   m_Name: 
@@ -264,6 +265,28 @@ MonoBehaviour:
   _timeSpectrumShader: {fileID: 7200000, guid: 13cec7a232349da4eaa2fd841f25256c, type: 3}
   _dispersionShader: {fileID: 7200000, guid: 95fbfe4d1b06f1a41a5c9bebc121d0ed, type: 3}
   _textureMergeShader: {fileID: 7200000, guid: 3c214933f5ebb674e961c5bdcf78aa07, type: 3}
+  _windAngle: 45
+  _windSpeed: 6
+  _gravity: 9.81
+  _patchSize: 128
+  _repeatTime: 200
+  _steepness: 0.8
+  _minWavelength: 0.001
+  _phillipsConstant: 0.0001
+--- !u!114 &69210491
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 69210483}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fb96bb574a97742479fb5274f4522de9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _fourierTexture: {fileID: 0}
+  _displacement: {fileID: 0}
   _windAngle: 45
   _windSpeed: 6
   _gravity: 9.81
