@@ -60,6 +60,7 @@ float PhillipsSpectrum(float2 k)
         phillipsSpectrum = _phillipsConstant * (exp(-1.0f / kL2) / k4) * dotProduct * suppression;
     }
 
+    // Return final value.
     return phillipsSpectrum;
 }
 

@@ -10,6 +10,7 @@ public class FourierWaterCPU : MonoBehaviour
     // Texture variables.
     public Texture2D _fourierTexture;
     public Texture2D _displacement;
+    public Texture2D _normalMap;
 
     // Pre-computed wave variables. Only re-generate if necessary.
     private Complex[] _gaussianNoise;
@@ -78,6 +79,7 @@ public class FourierWaterCPU : MonoBehaviour
 
         // Initialise displacement texture.
         _displacement = new Texture2D(_textureSize, _textureSize, TextureFormat.RGBAHalf, false);
+        _normalMap = new Texture2D(_textureSize, _textureSize, TextureFormat.RGBAHalf, false);
         UpdateDisplacement();
 
         // Store local reference to material.
@@ -190,6 +192,7 @@ public class FourierWaterCPU : MonoBehaviour
             phillipsSpectrum = _phillipsConstant * (Mathf.Exp(-1.0f / kL2) / k4) * dotProduct * suppression;
         }
 
+        // Return final value.
         return phillipsSpectrum;
     }
 
@@ -225,7 +228,7 @@ public class FourierWaterCPU : MonoBehaviour
         _fourierTexture.Apply();
     }
 
-    void UpdateWaveDispersion()
+    private void UpdateWaveDispersion()
     {
         // Loop through each pixel in the texture.
         for (int y = 0; y < _textureSize; y++)
@@ -276,8 +279,8 @@ public class FourierWaterCPU : MonoBehaviour
             Complex[] dy = new Complex[_textureSize * _textureSize];
             Complex[] dz = new Complex[_textureSize * _textureSize];
 
-            //Complex[] slopeX = new Complex[_textureSize * _textureSize];
-            //Complex[] slopeY = new Complex[_textureSize * _textureSize];
+            Complex[] slopeX = new Complex[_textureSize * _textureSize];
+            Complex[] slopeZ = new Complex[_textureSize * _textureSize];
 
             // Loop through each pixel in the heightfield.
             for (int y = 0; y < _textureSize; y++)
@@ -323,6 +326,10 @@ public class FourierWaterCPU : MonoBehaviour
                         dz[index] = tildeH * new Complex(0.0f, -1.0f * ky / wavelength);
                     }
 
+                    // Calculate slow vector.
+                    slopeX[index] = tildeH * new Complex(0.0f, kx);
+                    slopeZ[index] = tildeH * new Complex(0.0f, ky);
+
                     // Set current pixel in heightfield texture.
                     _fourierTexture.SetPixel(x, y, new Color((float)tildeH.Real, (float)tildeH.Imaginary, 0.0f, 1.0f));
                 }
@@ -337,6 +344,8 @@ public class FourierWaterCPU : MonoBehaviour
                 FastFourierTransform(dx, 1, y * _textureSize);
                 FastFourierTransform(dy, 1, y * _textureSize);
                 FastFourierTransform(dz, 1, y * _textureSize);
+                FastFourierTransform(slopeX, 1, y * _textureSize);
+                FastFourierTransform(slopeZ, 1, y * _textureSize);
             }
 
             // Vertical pass.
@@ -345,6 +354,8 @@ public class FourierWaterCPU : MonoBehaviour
                 FastFourierTransform(dx, _textureSize, x);
                 FastFourierTransform(dy, _textureSize, x);
                 FastFourierTransform(dz, _textureSize, x);
+                FastFourierTransform(slopeX, _textureSize, x);
+                FastFourierTransform(slopeZ, _textureSize, x);
             }
 
             float[] signs = { 1.0f, -1.0f };
@@ -364,11 +375,25 @@ public class FourierWaterCPU : MonoBehaviour
 
                     // Store output in displacement texture.
                     _displacement.SetPixel(x, y, new Color(r, g, b, 1.0f));
+
+                    Vector3 normal;
+
+                    // Calculate surface normal.
+                    normal.x = sign * (float)slopeX[x + y * _textureSize].Real;
+                    normal.y = 1.0f;
+                    normal.z = sign * (float)slopeZ[x + y * _textureSize].Real;
+
+                    // Normalize vector.
+                    normal.Normalize();
+
+                    // Store output in normal texture.
+                    _normalMap.SetPixel(x, y, new Color(normal.x, normal.y, normal.z, 1.0f));
                 }
             }
 
             // Apply changes to texture.
             _displacement.Apply();
+            _normalMap.Apply();
         }
     }
 
@@ -427,5 +452,45 @@ public class FourierWaterCPU : MonoBehaviour
         {
             input[i * stride + offset] = buffer[pingpong, i];
         }
+    }
+
+    // Returns a sample from the displacement texture.
+    public Vector3 GetDisplacement(Vector3 position)
+    {
+        // Initialise sample colour.
+        Color sample = Color.black;
+
+        // Convert position to uv coordinates based on patch size.
+        float u = position.x / _patchSize + 0.5f;
+        float v = position.y / _patchSize + 0.5f;
+
+        // Check if texture exists.
+        if (_displacement)
+        {
+            sample = _displacement.GetPixelBilinear(u, v);
+        }
+
+        // Return sample as a vector.
+        return new Vector3(sample.r, sample.g, sample.b);
+    }
+
+    // Returns a sample from the normal map.
+    public Vector3 GetSurfaceNormal(Vector3 position)
+    {
+        // Initialise sample colour.
+        Color sample = Color.black;
+
+        // Convert position to uv coordinates based on patch size.
+        float u = position.x / _patchSize + 0.5f;
+        float v = position.y / _patchSize + 0.5f;
+
+        // Check if texture exists.
+        if (_normalMap)
+        {
+            sample = _normalMap.GetPixelBilinear(u, v);
+        }
+
+        // Return sample as a vector.
+        return new Vector3(sample.r, sample.g, sample.b);
     }
 }
