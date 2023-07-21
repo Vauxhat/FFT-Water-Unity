@@ -27,7 +27,7 @@ public class FourierWaterGPU : MonoBehaviour
     public ComputeShader _textureMergeShader;
 
     // Pre-computed wave variables.
-    private uint[] _reversedIndex;
+    private int[] _reversedIndex;
 
     // Public variables for handling wave simulation.
     [Range(0.0f, 360.0f)] public float _windAngle = 0.0f;
@@ -61,13 +61,13 @@ public class FourierWaterGPU : MonoBehaviour
         InitialiseGaussianNoise();
 
         // Initialse array of reversed indices.
-        _reversedIndex = new uint[_textureSize];
+        _reversedIndex = new int[_textureSize];
 
         // Calculate the number of bits which it takes to represent the numbers.
         int bits = (int)Mathf.Log(_textureSize, 2);
 
         // Calculate the reversed position for each index in the array.
-        for (uint i = 0; i < _reversedIndex.Length; i++)
+        for (int i = 0; i < _reversedIndex.Length; i++)
         {
             _reversedIndex[i] = MathsExt.BitReverse(i, bits);
         }
