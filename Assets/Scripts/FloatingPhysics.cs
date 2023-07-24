@@ -7,11 +7,23 @@ public class FloatingPhysics : MonoBehaviour
     public FourierWaterCPU _waterSimulator;
     private Vector3 _worldPosition;
 
+    private Vector3 _forward;
+    private Vector3 _right;
+
+    private Vector3 _bounds;
+
     // Start is called before the first frame update
     void Start()
     {
         // Initialise world position.
         _worldPosition = this.transform.position;
+
+        // Initialise directional vectors.
+        _forward = this.transform.forward;
+        _right = this.transform.right;
+
+        // Get object bounds (no rotation) from mesh filter, apply scale.
+        _bounds = Vector3.Scale(this.GetComponent<MeshFilter>().mesh.bounds.size, this.transform.localScale);
     }
 
     // Update is called once per frame
@@ -20,21 +32,22 @@ public class FloatingPhysics : MonoBehaviour
         // Check if water simulator exists.
         if (_waterSimulator)
         {
-            // Update object position, using world position and displacement vector.
-            this.transform.position = _worldPosition + _waterSimulator.GetDisplacement(_worldPosition);
+            // Sample displacements along the forward and right vectors of the object bounds.
+            Vector3 a = _worldPosition + _forward * _bounds.z * 0.5f + _waterSimulator.GetDisplacement(_worldPosition + _forward * _bounds.z * 0.5f);
+            Vector3 b = _worldPosition - _forward * _bounds.z * 0.5f + _waterSimulator.GetDisplacement(_worldPosition - _forward * _bounds.z * 0.5f);
+            Vector3 c = _worldPosition + _right * _bounds.z * 0.5f + _waterSimulator.GetDisplacement(_worldPosition + _right * _bounds.z * 0.5f);
+            Vector3 d = _worldPosition - _right * _bounds.z * 0.5f + _waterSimulator.GetDisplacement(_worldPosition - _right * _bounds.z * 0.5f);
 
-            // Sample surface normal relative to world position.
-            Vector3 normal = _waterSimulator.GetSurfaceNormal(_worldPosition);
+            // Calculate forward, up, and right vectors.
+            Vector3 forward = Vector3.Normalize(a - b);
+            Vector3 right = Vector3.Normalize(c - d);
+            Vector3 up = Vector3.Cross(forward, right);
 
-            // Calculate rotation vector and angle.
-            Vector3 rotationVector = Vector3.Cross(normal, Vector3.up);
-            float angle = Vector3.Angle(normal, Vector3.up);
+            // Update world position using average displacement.
+            this.transform.position = 0.25f * (a + b + c + d);
 
-            // Create a quaternion which aligns the object to the surface.
-            Quaternion objectToSurface = Quaternion.AngleAxis(angle, rotationVector);
-
-            // Update object rotation, apply dampening.
-            this.transform.rotation = Quaternion.Slerp(Quaternion.Euler(Vector3.zero), objectToSurface, 0.2f);
+            // Update rotation based on axis vectors.
+            this.transform.rotation = Quaternion.LookRotation(forward, up);
         }
     }
 }

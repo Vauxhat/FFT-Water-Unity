@@ -13,6 +13,7 @@ public class CameraController : MonoBehaviour
     [Min(0.0f)]  public float distance = 4.0f;
 
     public CameraMode cameraMode = CameraMode.FirstPerson;
+    public Transform target;
 
     Vector3 rotation;
     Vector3 position;
@@ -37,7 +38,7 @@ public class CameraController : MonoBehaviour
             case CameraMode.ThirdPerson:
                 {
                     // Update distance to target.
-                    distance -= Input.mouseScrollDelta.y * 2.0f;
+                    distance = Mathf.Max(distance - Input.mouseScrollDelta.y * 2.0f, 0.0f);
 
                     // Check if mouse button is held down.
                     if (Input.GetMouseButton(0))
@@ -53,8 +54,17 @@ public class CameraController : MonoBehaviour
                         this.transform.localRotation = Quaternion.Euler(rotation);
                     }
 
-                    // Set camera position to orbit around focal point.
-                    this.transform.localPosition = position - this.transform.forward * distance;
+                    // Check if target object exists.
+                    if (target)
+                    {
+                        // Set camera position to orbit around target object.
+                        this.transform.localPosition = target.position - this.transform.forward * distance;
+                    }
+                    else
+                    {
+                        // Orbit camera around first person position.
+                        this.transform.localPosition = position - this.transform.forward * distance;
+                    }
 
                     break;
                 }

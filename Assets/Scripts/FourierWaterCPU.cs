@@ -18,7 +18,7 @@ public class FourierWaterCPU : MonoBehaviour
     private Complex[] _gaussianNoise;
     private Complex[] _frequencySpectrum;
     private float[] _waveDispersion;
-    private Complex[,] _twiddleFactor;
+    //private Complex[] _twiddleFactor;
     private int[] _reversedIndex;
 
     // Public variables for handling wave simulation.
@@ -33,7 +33,7 @@ public class FourierWaterCPU : MonoBehaviour
 
     // Private wave variables, used only in code.
     private Vector2 _windDirection;
-    private int _textureSize = 128;
+    private int _textureSize = 64;
     private int _fourierStages;
 
     // Previous variable states, used to detect changes.
@@ -54,7 +54,9 @@ public class FourierWaterCPU : MonoBehaviour
         InitialiseGaussianNoise();
 
         // Initialse array of reversed indices.
-        _reversedIndex = new int[_textureSize];
+        //_reversedIndex = new int[_textureSize];
+        _reversedIndex = FastFourierTransform.PrecomputeReversedIndex(_textureSize);
+        //_twiddleFactor = FastFourierTransform.PrecomputeTwiddleFactors(_textureSize);
 
         // Calculate the number of bits which it takes to represent the numbers.
         int bits = (int)Mathf.Log(_reversedIndex.Length, 2);
@@ -471,7 +473,9 @@ public class FourierWaterCPU : MonoBehaviour
 
         // Convert position to uv coordinates based on patch size.
         float u = position.x / _patchSize + 0.5f;
-        float v = position.y / _patchSize + 0.5f;
+        float v = position.z / _patchSize + 0.5f;
+
+        //Debug.Log(u.ToString() + ", " + v.ToString());
 
         // Check if texture exists.
         if (_displacement)
@@ -491,7 +495,7 @@ public class FourierWaterCPU : MonoBehaviour
 
         // Convert position to uv coordinates based on patch size.
         float u = position.x / _patchSize + 0.5f;
-        float v = position.y / _patchSize + 0.5f;
+        float v = position.z / _patchSize + 0.5f;
 
         // Check if texture exists.
         if (_normalMap)
