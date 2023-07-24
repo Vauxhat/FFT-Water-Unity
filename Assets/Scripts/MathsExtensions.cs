@@ -31,12 +31,8 @@ namespace Vauxhat
             return output;
         }
 
-        /// <summary>
-        /// Returns a random value with normal (gaussian) distribution using a Box-Muller transform. Mean and standard deviation can be recieved as inputs
-        /// </summary>
-        /// <param name="mean">The mean or average generated value.</param>
-        /// <param name="deviation">The standard deviation of the generated spectrum.</param>
-        static public float BoxMullerTransform(float mean = 0, float deviation = 1)
+        // Returns a random value with normal distribution.
+        static public void GaussianRandom(out float a, out float b, float mean = 0, float deviation = 1)
         {
             // Declare local variables.
             float u, v, s;
@@ -48,28 +44,11 @@ namespace Vauxhat
             v = Random.Range(0.0f, 1.0f);
 
             // Calculate factor for gaussian distribution.
-            s = Mathf.Sqrt(-2.0f * Mathf.Log(u)) * Mathf.Cos(2.0f * Mathf.PI * v);
+            s = deviation * Mathf.Sqrt(-2.0f * Mathf.Log(u));
 
-            // Return output value based on mean, deviation and random distribution.
-            return (mean + deviation * s);
-        }
-
-        // Returns a random value with normal distribution.
-        static public void GaussianRandom(float mean, float deviation, out float a, out float b)
-        {
-            float u1, u2;
-
-            do
-            {
-                u1 = Random.Range(0.0f, 1.0f);
-            }
-            while (u1 <= float.Epsilon);
-
-            u2 = Random.Range(0.0f, 1.0f);
-
-            float mag = deviation * Mathf.Sqrt(-2.0f * Mathf.Log(u1));
-            a = mag * Mathf.Cos(2.0f * Mathf.PI * u2) + mean;
-            b = mag * Mathf.Sin(2.0f * Mathf.PI * u2) + mean;
+            // Generate two outputs using sine and cosine.
+            a = s * Mathf.Cos(2.0f * Mathf.PI * v) + mean;
+            b = s * Mathf.Sin(2.0f * Mathf.PI * v) + mean;
         }
     }
 }

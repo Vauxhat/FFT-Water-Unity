@@ -16,7 +16,6 @@ public struct FastFourierTransform
 
         // Read only input variables.
         [ReadOnly] public NativeArray<int> _reversedIndex;
-        //[ReadOnly] public NativeArray<Complex> _twiddleFactor;
         [ReadOnly] public int _textureSize;
         [ReadOnly] public int _fourierStages;
         [ReadOnly] public bool _direction;
@@ -104,66 +103,21 @@ public struct FastFourierTransform
         // Calculate the number of bits used to represent indices.
         int bits = (int)Mathf.Log(textureSize, 2);
 
-        // Loop through the first half of the array.
-        /*for (int i = 0; i < output.Length / 2; i++)
-        {
-            // Calculate reversed index.
-            int reversed = MathsExt.BitReverse(i, bits);
-
-            // Update values at current and reversed indices.
-            output[i] = reversed;
-            output[reversed] = i;
-        }*/
-
+        // Loop through each pixel in output.
         for (int i = 0; i < output.Length; i++)
         {
+            // Calculate reversed index position for current index.
             output[i] = MathsExt.BitReverse(i, bits);
         }
 
         return output;
     }
 
-    //public static Complex[] PrecomputeTwiddleFactors(int textureSize)
-    //{
-    //    // Calculate the number of bits used to represent indices.
-    //    int stages = (int)Mathf.Log(textureSize, 2);
-
-    //    // Initialise output array.
-    //    Complex[] output = new Complex[textureSize * stages];
-
-    //    for (int s = 0; s < stages; s++)
-    //    {
-    //        // Calculate 2 to the power of s.
-    //        int m = 2 << s;
-
-    //        float twiddle = (-2.0f * Mathf.PI) / m;
-    //        Complex wm = new Complex(Mathf.Cos(twiddle), Mathf.Sin(twiddle));
-
-    //        // Loop through each index in the line, in groups of size m.
-    //        for (int k = 0; k < textureSize; k += m)
-    //        {
-    //            Complex w = new Complex(1.0f, 0.0f);
-
-    //            // loop through the first half of indices in the group.
-    //            for (int j = 0; j < (m / 2); j++)
-    //            {
-    //                output[s * textureSize + k + j] = w;
-    //                w *= wm;
-    //            }
-    //        }
-    //    }
-
-    //    return output;
-    //}
-
     // Computes the 2D FFT of the input, intermediate variables will be calculated at run-time.
     public static void Compute(Complex[] input, int textureSize)
     {
         // Calculate reversed index.
         int[] reversedIndex = PrecomputeReversedIndex(textureSize);
-
-        // Calculate twiddle factors.
-        //Complex[] twiddleFactor = PrecomputeTwiddleFactors(textureSize);
 
         // Compute FFT.
         Compute(input, textureSize, reversedIndex);
@@ -175,7 +129,6 @@ public struct FastFourierTransform
         // Create native array for input data.
         NativeArray<Complex> nativeInput = new NativeArray<Complex>(input.Length, Allocator.TempJob);
         NativeArray<int> nativeReversedIndex = new NativeArray<int>(reversedIndex.Length, Allocator.TempJob);
-        //NativeArray<Complex> nativeTwiddleFactor = new NativeArray<Complex>(twiddleFactor.Length, Allocator.TempJob);
 
         // Calculate number of stages.
         int stages = (int)Mathf.Log(textureSize, 2);
@@ -192,12 +145,6 @@ public struct FastFourierTransform
             nativeInput[i] = input[i];
         }
 
-        // Copy source array into native array.
-        //for (int i = 0; i < twiddleFactor.Length; i++)
-        //{
-        //    nativeTwiddleFactor[i] = twiddleFactor[i];
-        //}
-
         // Create new job.
         FFTJob job = new FFTJob()
         {
@@ -205,7 +152,6 @@ public struct FastFourierTransform
             _fourierStages = stages,
             _input = nativeInput,
             _reversedIndex = nativeReversedIndex,
-            //_twiddleFactor = nativeTwiddleFactor
         };
 
         // Create job handle.
@@ -234,6 +180,5 @@ public struct FastFourierTransform
         // Dispose of native array structure.
         nativeInput.Dispose();
         nativeReversedIndex.Dispose();
-        //nativeTwiddleFactor.Dispose();
     }
 }

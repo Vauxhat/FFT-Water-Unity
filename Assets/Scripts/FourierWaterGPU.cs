@@ -113,8 +113,8 @@ public class FourierWaterGPU : MonoBehaviour
             float r, g, b, a;
 
             // Generate two pairs of gaussian noise.
-            MathsExt.GaussianRandom(0.0f, 1.0f, out r, out g);
-            MathsExt.GaussianRandom(0.0f, 1.0f, out b, out a);
+            MathsExt.GaussianRandom(out r, out g);
+            MathsExt.GaussianRandom(out b, out a);
 
             // Store gaussian variables in texture.
             _gaussianNoise.SetPixel(x, y, new Color(r, g, b, a));
@@ -135,7 +135,6 @@ public class FourierWaterGPU : MonoBehaviour
 
         // Pass textures to compute shader.
         _stationarySpectrumShader.SetTexture(kernelIndex, Shader.PropertyToID("_stationarySpectrum"), _stationarySpectrum);
-        //_stationarySpectrumShader.SetTexture(kernelIndex, Shader.PropertyToID("_gaussianNoise"), _gaussianNoise);
 
         // Calculate initial spectrum.
         UpdateStationarySpectrum();
@@ -291,107 +290,6 @@ public class FourierWaterGPU : MonoBehaviour
         }
     }
 
-    private void FixedUpdate()
-    {
-        
-    }
-
-    /*public Vector3 GetDisplacement(Vector3 worldPosition, float minWavelength)
-    {
-        // Calculate pixel coordinates of sample.
-        int u = Mathf.FloorToInt(_textureSize * (worldPosition.x % _patchSize) / _patchSize);
-        int v = Mathf.FloorToInt(_textureSize * (worldPosition.y % _patchSize) / _patchSize);
-
-        // Sample stationary spectrum.
-        Color stationarySample;
-
-
-
-        // Calculate time dependent value.
-
-        Complex dx, dy, dz;
-
-        // Calculate wave vector k.
-        float kx = Mathf.PI * (2.0f * u - _textureSize) / _patchSize;
-        float ky = Mathf.PI * (2.0f * v - _textureSize) / _patchSize;
-
-        // Calculate wavelength of k vector.
-        float wavelength = Mathf.Sqrt(kx * kx + ky * ky);
-
-        // Calculate time factor.
-        float exponent = _waveDispersion[id] * Time.time;
-
-        // Calculate ~h0 and conjugate using stationary spectrum, seed based on time.
-        Complex tildeh0 = new Complex(stationarySample.r, stationarySample.g) * new Complex(Mathf.Cos(exponent), Mathf.Sin(exponent));
-        Complex tildeh0i = new Complex(stationarySample.b, stationarySample.a) * new Complex(Mathf.Cos(exponent), Mathf.Sin(-exponent));
-
-        // Calculate ~h from composite variables.
-        Complex tildeh = tildeh0 + tildeh0i;
-
-        // Set height component of time spectrum.
-        dy = tildeh;
-
-        // Make sure wavelength is a non-zero number, avoid division error.
-        if (wavelength < 0.000001f)
-        {
-            // Set displacement to zero.
-            dx = new Complex(0.0f, 0.0f);
-            dz = new Complex(0.0f, 0.0f);
-        }
-        else
-        {
-            // Set x and y components of time spectrum.
-            dx = tildeh * new Complex(0.0f, -kx / wavelength);
-            dz = tildeh * new Complex(0.0f, -ky / wavelength);
-        }
-
-        // Calculate discrete fourier transform.
-    }*/
-
-    private float CalculatePhillips(Vector2 k)
-    {
-        // Initialise phillips spectrum.
-        float phillipsSpectrum = 0.0f;
-
-        // Calculate the length of the vector k.
-        float waveLength = Mathf.Sqrt(k.x * k.x + k.y * k.y);
-
-        // Set minimum wavelength (default 1mm).
-        float l = _minWavelength;
-
-        // Check if wavelength is greater than zero, avoid division error.
-        if (waveLength > l)
-        {
-            // Calculate L factor (Squared wind speed divided by gravity).
-            float L = (_windSpeed * _windSpeed) / _gravity;
-
-            // Calculate normalized value for k, store as local variable.
-            Vector2 waveDirection = k / waveLength;
-
-            // Calculate wavelength to the power of four.
-            float k2 = waveLength * waveLength;
-            float k4 = k2 * k2;
-
-            float kL2 = k2 * L * L;
-
-            // Calculate the dot product of the wave direction and wind direction.
-            float dotProduct = Vector2.Dot(waveDirection, _windDirection);
-            dotProduct = dotProduct * dotProduct;
-
-            // Define phillips constant.
-            //float A = 0.0081f;
-            float A = 0.0002f;
-
-            // Calculate suppression. This should suppress waves at lower wavelenghts.
-            float suppression = Mathf.Exp(-1.0f * k2 * l * l);
-
-            // Calculate factor from phillips spectrum.
-            phillipsSpectrum = A * (Mathf.Exp(-1.0f / kL2) / k4) * dotProduct * suppression;
-        }
-
-        return phillipsSpectrum;
-    }
-
     private void UpdateStationarySpectrum()
     {
         uint x, y, z;
@@ -525,8 +423,6 @@ public class FourierWaterGPU : MonoBehaviour
 
         // Merge real values for displacement into a single texture.
         MergeTextures();
-
-        // Merge real values for surface normal into a single texture.
     }
 
     private void ComputeFFT(RenderTexture texture)

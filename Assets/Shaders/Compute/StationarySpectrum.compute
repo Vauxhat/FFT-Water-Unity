@@ -70,7 +70,7 @@ void ComputeNoise(uint2 id : SV_DispatchThreadID)
     // Possible GPU noise generation.
 }
 
-[numthreads(8,8,1)]
+[numthreads(8, 8, 1)]
 void ComputeStationary(uint2 id : SV_DispatchThreadID)
 {
     float2 k;

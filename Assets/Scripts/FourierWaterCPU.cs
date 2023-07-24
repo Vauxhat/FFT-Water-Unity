@@ -18,7 +18,6 @@ public class FourierWaterCPU : MonoBehaviour
     private Complex[] _gaussianNoise;
     private Complex[] _frequencySpectrum;
     private float[] _waveDispersion;
-    //private Complex[] _twiddleFactor;
     private int[] _reversedIndex;
 
     // Public variables for handling wave simulation.
@@ -34,7 +33,6 @@ public class FourierWaterCPU : MonoBehaviour
     // Private wave variables, used only in code.
     private Vector2 _windDirection;
     private int _textureSize = 64;
-    private int _fourierStages;
 
     // Previous variable states, used to detect changes.
     private float _prevWindAngle = 0.0f;
@@ -53,19 +51,8 @@ public class FourierWaterCPU : MonoBehaviour
         // Initialise gaussian noise.
         InitialiseGaussianNoise();
 
-        // Initialse array of reversed indices.
-        //_reversedIndex = new int[_textureSize];
+        // Pre-compute reversed index.
         _reversedIndex = FastFourierTransform.PrecomputeReversedIndex(_textureSize);
-        //_twiddleFactor = FastFourierTransform.PrecomputeTwiddleFactors(_textureSize);
-
-        // Calculate the number of bits which it takes to represent the numbers.
-        int bits = (int)Mathf.Log(_reversedIndex.Length, 2);
-
-        // Calculate the reversed position for each index in the array.
-        for (int i = 0; i < _reversedIndex.Length; i++)
-        {
-            _reversedIndex[i] = MathsExt.BitReverse(i, bits);
-        }
 
         // Initialise wave disperion, pre-compute for faster computation.
         _waveDispersion = new float[_textureSize * _textureSize];
@@ -88,9 +75,6 @@ public class FourierWaterCPU : MonoBehaviour
 
         // Store local reference to material.
         _material = this.gameObject.GetComponent<Renderer>().sharedMaterial;
-
-        // Determine number of fourier stages based on texture size.
-        _fourierStages = (int)Mathf.Log(_textureSize, 2);
     }
 
     // Update is called once per frame
@@ -145,14 +129,11 @@ public class FourierWaterCPU : MonoBehaviour
         // Fill array with independent gaussian values.
         for (int i = 0; i < _textureSize * _textureSize; i++)
         {
-            int x = i % _textureSize;
-            int y = i / _textureSize;
-
             float r, g, b, a;
 
             // Generate two pairs of gaussian noise.
-            MathsExt.GaussianRandom(0.0f, 1.0f, out r, out g);
-            MathsExt.GaussianRandom(0.0f, 1.0f, out b, out a);
+            MathsExt.GaussianRandom(out r, out g);
+            MathsExt.GaussianRandom(out b, out a);
 
             // Store gaussian values in array.
             _gaussianNoise[2 * i] = new Complex(r, g);
@@ -330,7 +311,7 @@ public class FourierWaterCPU : MonoBehaviour
                         dz[index] = tildeH * new Complex(0.0f, -1.0f * ky / wavelength);
                     }
 
-                    // Calculate slow vector.
+                    // Calculate slope vector.
                     slopeX[index] = tildeH * new Complex(0.0f, kx);
                     slopeZ[index] = tildeH * new Complex(0.0f, ky);
 
@@ -341,26 +322,6 @@ public class FourierWaterCPU : MonoBehaviour
 
             // Apply changes to texture.
             _fourierTexture.Apply();
-
-            // Horizontal pass.
-            //for (int y = 0; y < _textureSize; y++)
-            //{
-            //    FastFourierTransform(dx, 1, y * _textureSize);
-            //    FastFourierTransform(dy, 1, y * _textureSize);
-            //    FastFourierTransform(dz, 1, y * _textureSize);
-            //    FastFourierTransform(slopeX, 1, y * _textureSize);
-            //    FastFourierTransform(slopeZ, 1, y * _textureSize);
-            //}
-
-            //// Vertical pass.
-            //for (int x = 0; x < _textureSize; x++)
-            //{
-            //    FastFourierTransform(dx, _textureSize, x);
-            //    FastFourierTransform(dy, _textureSize, x);
-            //    FastFourierTransform(dz, _textureSize, x);
-            //    FastFourierTransform(slopeX, _textureSize, x);
-            //    FastFourierTransform(slopeZ, _textureSize, x);
-            //}
 
             // Perform FFT operations.
             FastFourierTransform.Compute(dx, _textureSize, _reversedIndex);
@@ -379,7 +340,7 @@ public class FourierWaterCPU : MonoBehaviour
                     // Determine sign of current sample.
                     float sign = signs[(x + y) % 2];
 
-                    // Calculate final displacement values
+                    // Calculate final displacement values.
                     float r = sign * (float)dx[x + y * _textureSize].Real * -1.0f * _steepness;
                     float g = sign * (float)dy[x + y * _textureSize].Real;
                     float b = sign * (float)dz[x + y * _textureSize].Real * -1.0f * _steepness;
@@ -407,63 +368,6 @@ public class FourierWaterCPU : MonoBehaviour
             _normalMap.Apply();
         }
     }
-
-    /*private void FastFourierTransform(Complex[] input, int stride, int offset)
-    {
-        // Create a pingpong buffer of size N.
-        Complex[,] buffer = new Complex[2, _textureSize];
-
-        // Copy current row of input into buffer using bit-reversal permutation.
-        for (int i = 0; i < _textureSize; i++)
-        {
-            buffer[0, i] = input[_reversedIndex[i] * stride + offset];
-        }
-
-        int pingpong = 0;
-
-        // Perform FFT for each stage (zero to Log N).
-        for (int s = 0; s < _fourierStages; s++)
-        {
-            // Calculate 2 to the power of s.
-            int m = 2 << s;
-
-            float twiddle = (-2.0f * Mathf.PI) / m;
-            Complex wm = new Complex(Mathf.Cos(twiddle), Mathf.Sin(twiddle));
-
-            // Loop through each index in the line, in groups of size m.
-            for (int k = 0; k < _textureSize; k += m)
-            {
-                Complex w = new Complex(1.0f, 0.0f);
-
-                // loop through the first half of indices in the group.
-                for (int j = 0; j < (m / 2); j++)
-                {
-                    // Get top and bottom index from sample.
-                    int topIndex = k + j;
-                    int bottomIndex = k + j + (m / 2);
-
-                    // Get complex variables from previous stage.
-                    Complex a = buffer[pingpong, topIndex];
-                    Complex b = buffer[pingpong, bottomIndex] * w;
-
-                    // Calculate new values for top and bottom index.
-                    buffer[(pingpong + 1) % 2, topIndex] = a + b;
-                    buffer[(pingpong + 1) % 2, bottomIndex] = a - b;
-
-                    w *= wm;
-                }
-            }
-
-            // Switch to next array in buffer.
-            pingpong = (pingpong + 1) % 2;
-        }
-
-        // Copy final FFT for the current sequence into the output buffer.
-        for (int i = 0; i < _textureSize; i++)
-        {
-            input[i * stride + offset] = buffer[pingpong, i];
-        }
-    }*/
 
     // Returns a sample from the displacement texture.
     public Vector3 GetDisplacement(Vector3 position)
@@ -507,192 +411,3 @@ public class FourierWaterCPU : MonoBehaviour
         return new Vector3(sample.r, sample.g, sample.b);
     }
 }
-
-/*class FFT
-{
-    private struct FFTJob : IJobParallelFor
-    {
-        // Input buffer.
-        [NativeDisableParallelForRestriction] public NativeArray<Complex> _input;
-
-        // Read only input variables.
-        [ReadOnly] public NativeArray<int> _reversedIndex;
-        [ReadOnly] public int _textureSize;
-        [ReadOnly] public int _fourierStages;
-        [ReadOnly] public bool _direction;
-
-        public void Execute(int index)
-        {
-            // Calculate FFT based on direction.
-            if (_direction)
-            {
-                // Vertical Pass.
-                FastFourierTransform(_textureSize, index);
-            }
-            else
-            {
-                // Horizontal Pass.
-                FastFourierTransform(1, index * _textureSize);
-            }
-        }
-
-        private void FastFourierTransform(int stride, int offset)
-        {
-            // Create a pingpong buffer of size N.
-            Complex[,] buffer = new Complex[2, _textureSize];
-
-            // Copy current row of input into buffer using bit-reversal permutation.
-            for (int i = 0; i < _textureSize; i++)
-            {
-                buffer[0, i] = _input[_reversedIndex[i] * stride + offset];
-            }
-
-            // Initialise pingpong state.
-            int pingpong = 0;
-
-            // Perform FFT for each stage (zero to Log N).
-            for (int s = 0; s < _fourierStages; s++)
-            {
-                // Calculate 2 to the power of s.
-                int m = 2 << s;
-
-                float twiddle = (-2.0f * Mathf.PI) / m;
-                Complex wm = new Complex(Mathf.Cos(twiddle), Mathf.Sin(twiddle));
-
-                // Loop through each index in the line, in groups of size m.
-                for (int k = 0; k < _textureSize; k += m)
-                {
-                    Complex w = new Complex(1.0f, 0.0f);
-
-                    // loop through the first half of indices in the group.
-                    for (int j = 0; j < (m / 2); j++)
-                    {
-                        // Get top and bottom index from sample.
-                        int topIndex = k + j;
-                        int bottomIndex = k + j + (m / 2);
-
-                        // Get complex variables from previous stage.
-                        Complex a = buffer[pingpong, topIndex];
-                        Complex b = buffer[pingpong, bottomIndex] * w;
-
-                        // Calculate new values for top and bottom index.
-                        buffer[(pingpong + 1) % 2, topIndex] = a + b;
-                        buffer[(pingpong + 1) % 2, bottomIndex] = a - b;
-
-                        w *= wm;
-                    }
-                }
-
-                // Switch to next array in buffer.
-                pingpong = (pingpong + 1) % 2;
-            }
-
-            // Copy final FFT for the current sequence into the output buffer.
-            for (int i = 0; i < _textureSize; i++)
-            {
-                _input[i * stride + offset] = buffer[pingpong, i];
-            }
-        }
-    }
-
-    // Calculates an array of reversed indices in the range 0 - textureSize.
-    public static int[] PrecomputeReversedIndex(int textureSize)
-    {
-        // Initialise output array.
-        int[] output = new int[textureSize];
-
-        // Calculate the number of bits used to represent indices.
-        int bits = (int)Mathf.Log(textureSize, 2);
-
-        // Loop through the first half of the array.
-        for (int i = 0; i < output.Length / 2; i++)
-        {
-            // Calculate reversed index.
-            int reversed = MathsExt.BitReverse(i, bits);
-
-            // Update values at current and reversed indices.
-            output[i] = reversed;
-            output[reversed] = i;
-        }
-
-        return output;
-    }
-
-    // Computes the 2D FFT of the input, intermediate variables will be calculated at run-time.
-    public static void Compute(Complex[] input, int textureSize)
-    {
-        // Create array for reversed index.
-        int[] reversedIndex = new int[textureSize];
-
-        // Calculate number of stages.
-        int stages = (int)Mathf.Log(textureSize, 2);
-
-        // Initialise array.
-        for (int i = 0; i < textureSize; i++)
-        {
-            reversedIndex[i] = MathsExt.BitReverse(i, stages);
-        }
-
-        // Compute FFT.
-        Compute(input, textureSize, reversedIndex);
-    }
-
-    // Computes the 2D FFT of the input, intermediate variables are passed into the function.
-    public static void Compute(Complex[] input, int textureSize, int[] reversedIndex)
-    {
-        // Create native array for input data.
-        NativeArray<Complex> nativeInput = new NativeArray<Complex>(input.Length, Allocator.TempJob);
-        NativeArray<int> nativeReversedIndex = new NativeArray<int>(textureSize, Allocator.TempJob);
-
-        // Calculate number of stages.
-        int stages = (int)Mathf.Log(textureSize, 2);
-
-        // Copy reverse index to native array.
-        for (int i = 0; i < textureSize; i++)
-        {
-            nativeReversedIndex[i] = reversedIndex[i];
-        }
-
-        // Copy source array into native array.
-        for (int i = 0; i < input.Length; i++)
-        {
-            nativeInput[i] = input[i];
-        }
-
-        // Create new job.
-        FFTJob job = new FFTJob()
-        {
-            _textureSize = textureSize,
-            _fourierStages = stages,
-            _input = nativeInput,
-            _reversedIndex = nativeReversedIndex
-        };
-
-        // Create job handle.
-        JobHandle jobHandle;
-
-        // Perform horizontal operation.
-        job._direction = false;
-        jobHandle = job.Schedule(textureSize, 1);
-
-        // Wait until all threads are finished.
-        jobHandle.Complete();
-
-        // Perform vertical operation.
-        job._direction = true;
-        jobHandle = job.Schedule(textureSize, 1);
-
-        // Wait until all threads are finished.
-        jobHandle.Complete();
-
-        // Copy output to source array.
-        for (int i = 0; i < input.Length; i++)
-        {
-            input[i] = nativeInput[i];
-        }
-
-        // Dispose of native array structure.
-        nativeInput.Dispose();
-        nativeReversedIndex.Dispose();
-    }
-}*/
