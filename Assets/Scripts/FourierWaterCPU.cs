@@ -10,8 +10,8 @@ using Complex = System.Numerics.Complex;
 public class FourierWaterCPU : MonoBehaviour
 {
     // Texture variables.
-    public Texture2D _fourierTexture;
-    public Texture2D _displacement;
+    public Texture2D _displacementTexture;
+    private Vector3[] _displacement;
 
     // Pre-computed wave variables. Only re-generate if necessary.
     private Complex[] _gaussianNoise;
@@ -31,7 +31,7 @@ public class FourierWaterCPU : MonoBehaviour
 
     // Private wave variables, used only in code.
     private Vector2 _windDirection;
-    private int _textureSize = 64;
+    private int _textureSize = 128;
 
     // Previous variable states, used to detect changes.
     private float _prevWindAngle = 0.0f;
@@ -62,13 +62,11 @@ public class FourierWaterCPU : MonoBehaviour
 
         // Initialise frequency spectrum. Interweave ~h and ~h* for better locality.
         _frequencySpectrum = new Complex[_textureSize * _textureSize * 2];
-
-        // Initialise fourier texture.
-        _fourierTexture = new Texture2D(_textureSize, _textureSize, TextureFormat.RGBAHalf, false);
         UpdateFrequencySpectrum();
 
         // Initialise displacement texture.
-        _displacement = new Texture2D(_textureSize, _textureSize, TextureFormat.RGBAHalf, false);
+        _displacementTexture = new Texture2D(_textureSize, _textureSize, TextureFormat.RGBAHalf, false);
+        _displacement = new Vector3[_textureSize * _textureSize];
         UpdateDisplacement();
 
         // Store local reference to material.
@@ -115,7 +113,7 @@ public class FourierWaterCPU : MonoBehaviour
         if (_material)
         {
             // Pass heightfield texture to material shader.
-            _material.SetTexture("_MainTex", _displacement);
+            _material.SetTexture("_MainTex", _displacementTexture);
         }
     }
 
@@ -203,12 +201,12 @@ public class FourierWaterCPU : MonoBehaviour
                 _frequencySpectrum[index + 1] = Complex.Conjugate(Mathf.Sqrt(CalculatePhillips(-k) * 0.5f) * _gaussianNoise[index + 1]);
 
                 // Calculate final output, apply to noise texture.
-                _fourierTexture.SetPixel(x, y, new Color((float)_frequencySpectrum[index].Real, (float)_frequencySpectrum[index].Imaginary, 0.0f, 1.0f));
+                //_fourierTexture.SetPixel(x, y, new Color((float)_frequencySpectrum[index].Real, (float)_frequencySpectrum[index].Imaginary, 0.0f, 1.0f));
             }
         }
 
         // Apply changes to texture.
-        _fourierTexture.Apply();
+        //_fourierTexture.Apply();
     }
 
     private void UpdateWaveDispersion()
@@ -255,7 +253,7 @@ public class FourierWaterCPU : MonoBehaviour
     private void UpdateDisplacement()
     {
         // Check if texture exists.
-        if (_displacement)
+        if (_displacementTexture)
         {
             // Create arrays for time dependent spectrum.
             Complex[] dx = new Complex[_textureSize * _textureSize];
@@ -307,12 +305,12 @@ public class FourierWaterCPU : MonoBehaviour
                     }
 
                     // Set current pixel in heightfield texture.
-                    _fourierTexture.SetPixel(x, y, new Color((float)tildeH.Real, (float)tildeH.Imaginary, 0.0f, 1.0f));
+                    //_fourierTexture.SetPixel(x, y, new Color((float)tildeH.Real, (float)tildeH.Imaginary, 0.0f, 1.0f));
                 }
             }
 
             // Apply changes to texture.
-            _fourierTexture.Apply();
+            //_fourierTexture.Apply();
 
             // Perform FFT operations.
             FastFourierTransform.Compute(dx, _textureSize, _reversedIndex);
@@ -335,34 +333,41 @@ public class FourierWaterCPU : MonoBehaviour
                     float b = sign * (float)dz[x + y * _textureSize].Real * -1.0f * _steepness;
 
                     // Store output in displacement texture.
-                    _displacement.SetPixel(x, y, new Color(r, g, b, 1.0f));
+                    _displacementTexture.SetPixel(x, y, new Color(r, g, b, 1.0f));
+                    _displacement[x + y * _textureSize] = new Vector3(r, g, b);
                 }
             }
 
             // Apply changes to texture.
-            _displacement.Apply();
+            _displacementTexture.Apply();
         }
     }
 
-    // Returns a sample from the displacement texture.
+    // Returns a displacement vector based on a given world position.
     public Vector3 GetDisplacement(Vector3 position)
     {
-        // Initialise sample colour.
-        Color sample = Color.black;
+        // Calculate relative pixel coordinates of sample.
+        float x = _textureSize * (position.x / _patchSize + 0.5f) % _textureSize;
+        float y = _textureSize * (position.z / _patchSize + 0.5f) % _textureSize;
 
-        // Convert position to uv coordinates based on patch size.
-        float u = position.x / _patchSize + 0.5f;
-        float v = position.z / _patchSize + 0.5f;
+        // Calculate minimum and maximum values for sample.
+        int minX = (int)x;
+        int maxX = (minX + 1) % _textureSize;
+        int minY = (int)y;
+        int maxY = (minY + 1) % _textureSize;
 
-        //Debug.Log(u.ToString() + ", " + v.ToString());
+        // Extract decimal value from sample coordinates, used for interpolation.
+        float lerpX = x - minX;
+        float lerpY = y - minY;
 
-        // Check if texture exists.
-        if (_displacement)
-        {
-            sample = _displacement.GetPixelBilinear(u, v);
-        }
+        // Interpolate between minimum and maximum values of x.
+        Vector3 top = Vector3.Lerp(_displacement[minX + minY * _textureSize], _displacement[maxX + minY * _textureSize], lerpX);
+        Vector3 bottom = Vector3.Lerp(_displacement[minX + maxY * _textureSize], _displacement[maxX + maxY * _textureSize], lerpX);
+
+        // Interpolate between top and bottom samples.
+        Vector3 sample = Vector3.Lerp(top, bottom, lerpY);
 
         // Return sample as a vector.
-        return new Vector3(sample.r, sample.g, sample.b);
+        return new Vector3(sample.x, sample.y, sample.z);
     }
 }
