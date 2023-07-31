@@ -250,6 +250,64 @@ public class FourierWaterCPU : MonoBehaviour
         }
     }
 
+    private struct TimeSpectrumJob : IJobParallelFor
+    {
+        // Input buffers.
+        [ReadOnly] public NativeArray<float> _waveDispersion;
+        [ReadOnly] public NativeArray<Complex> _frequencySpectrum;
+
+        // Output buffers.
+        public NativeArray<Complex> _dx;
+        public NativeArray<Complex> _dy;
+        public NativeArray<Complex> _dz;
+
+        // Read only input variables.
+        [ReadOnly] public float _time;
+        [ReadOnly] public int _textureSize;
+        [ReadOnly] public int _patchSize;
+
+        public void Execute(int index)
+        {
+            // Calculate 2D coordinates based on 1D index.
+            int x = index % _textureSize;
+            int y = index / _textureSize;
+
+            // Calculate wave vector.
+            float ky = (2.0f * Mathf.PI * (y - _textureSize * 0.5f)) / _patchSize;
+            float kx = (2.0f * Mathf.PI * (x - _textureSize * 0.5f)) / _patchSize;
+
+            // Calculate wavelength of wave vector.
+            float wavelength = Mathf.Sqrt(kx * kx + ky * ky);
+
+            // Calculate time factor.
+            float exponent = _waveDispersion[index] * _time;
+
+            // Calculate ~h0 and conjugate using stationary spectrum, seed based on time.
+            Complex tildeH0 = _frequencySpectrum[2 * index] * new Complex(Mathf.Cos(exponent), Mathf.Sin(exponent));
+            Complex tildeH0Conjugate = _frequencySpectrum[2 * index + 1] * new Complex(Mathf.Cos(exponent), Mathf.Sin(-exponent));
+
+            // Calculate ~h from composite variables.
+            Complex tildeH = tildeH0 + tildeH0Conjugate;
+
+            // Set height component of time dependent spectrum.
+            _dy[index] = tildeH;
+
+            // Make sure wavelength is a non-zero number, avoid division error.
+            if (wavelength < 0.000001f)
+            {
+                // Set displacement to zero.
+                _dx[index] = new Complex(0.0f, 0.0f);
+                _dz[index] = new Complex(0.0f, 0.0f);
+            }
+            else
+            {
+                // Set x and y components of time spectrum.
+                _dx[index] = tildeH * new Complex(0.0f, -1.0f * kx / wavelength);
+                _dz[index] = tildeH * new Complex(0.0f, -1.0f * ky / wavelength);
+            }
+        }
+    }
+
     private void UpdateDisplacement()
     {
         // Check if texture exists.
@@ -260,57 +318,59 @@ public class FourierWaterCPU : MonoBehaviour
             Complex[] dy = new Complex[_textureSize * _textureSize];
             Complex[] dz = new Complex[_textureSize * _textureSize];
 
-            // Loop through each pixel in the heightfield.
-            for (int y = 0; y < _textureSize; y++)
+            // Create native array for input data.
+            NativeArray<float> nativeWaveDispersion = new NativeArray<float>(_waveDispersion.Length, Allocator.TempJob);
+            NativeArray<Complex> nativeFrequencySpectrum = new NativeArray<Complex>(_frequencySpectrum.Length, Allocator.TempJob);
+
+            // Create native array for output data.
+            NativeArray<Complex> nativeX = new NativeArray<Complex>(_textureSize * _textureSize, Allocator.TempJob);
+            NativeArray<Complex> nativeY = new NativeArray<Complex>(_textureSize * _textureSize, Allocator.TempJob);
+            NativeArray<Complex> nativeZ = new NativeArray<Complex>(_textureSize * _textureSize, Allocator.TempJob);
+
+            // Copy source array into native array.
+            for (int i = 0; i < _waveDispersion.Length; i++)
             {
-                // Calculate y component of wave vector.
-                float ky = (2.0f * Mathf.PI * (y - _textureSize * 0.5f)) / _patchSize;
-
-                for (int x = 0; x < _textureSize; x++)
-                {
-                    // Calculate x component of wave vector.
-                    float kx = (2.0f * Mathf.PI * (x - _textureSize * 0.5f)) / _patchSize;
-
-                    // Calculate wavelength of wave vector.
-                    float wavelength = Mathf.Sqrt(kx * kx + ky * ky);
-
-                    // Calculate index in one dimensional array.
-                    int index = x + y * _textureSize;
-
-                    // Calculate time factor.
-                    float exponent = _waveDispersion[index] * Time.time;
-
-                    // Calculate ~h0 and conjugate using stationary spectrum, seed based on time.
-                    Complex tildeH0 = _frequencySpectrum[2 * index] * new Complex(Mathf.Cos(exponent), Mathf.Sin(exponent));
-                    Complex tildeH0Conjugate = _frequencySpectrum[2 * index + 1] * new Complex(Mathf.Cos(exponent), Mathf.Sin(-exponent));
-
-                    // Calculate ~h from composite variables.
-                    Complex tildeH = tildeH0 + tildeH0Conjugate;
-
-                    // Set height component of time dependent spectrum.
-                    dy[index] = tildeH;
-
-                    // Make sure wavelength is a non-zero number, avoid division error.
-                    if (wavelength < 0.000001f)
-                    {
-                        // Set displacement to zero.
-                        dx[index] = new Complex(0.0f, 0.0f);
-                        dz[index] = new Complex(0.0f, 0.0f);
-                    }
-                    else
-                    {
-                        // Set x and y components of time spectrum.
-                        dx[index] = tildeH * new Complex(0.0f, -1.0f * kx / wavelength);
-                        dz[index] = tildeH * new Complex(0.0f, -1.0f * ky / wavelength);
-                    }
-
-                    // Set current pixel in heightfield texture.
-                    //_fourierTexture.SetPixel(x, y, new Color((float)tildeH.Real, (float)tildeH.Imaginary, 0.0f, 1.0f));
-                }
+                nativeWaveDispersion[i] = _waveDispersion[i];
+                nativeFrequencySpectrum[2 * i] = _frequencySpectrum[2 * i];
+                nativeFrequencySpectrum[2 * i + 1] = _frequencySpectrum[2 * i + 1];
             }
 
-            // Apply changes to texture.
-            //_fourierTexture.Apply();
+            // Create new job.
+            TimeSpectrumJob job = new TimeSpectrumJob()
+            {
+                _waveDispersion = nativeWaveDispersion,
+                _frequencySpectrum = nativeFrequencySpectrum,
+                _dx = nativeX,
+                _dy = nativeY,
+                _dz = nativeZ,
+                _time = Time.time,
+                _textureSize = _textureSize,
+                _patchSize = _patchSize,
+            };
+
+            // Create job handle.
+            JobHandle jobHandle;
+
+            // Perform horizontal operation.
+            jobHandle = job.Schedule(_textureSize * _textureSize, 1);
+
+            // Wait until all threads are finished.
+            jobHandle.Complete();
+
+            // Copy output array to source array.
+            for (int i = 0; i < _textureSize * _textureSize; i++)
+            {
+                dx[i] = nativeX[i];
+                dy[i] = nativeY[i];
+                dz[i] = nativeZ[i];
+            }
+
+            // Dispose of native array structure.
+            nativeWaveDispersion.Dispose();
+            nativeFrequencySpectrum.Dispose();
+            nativeX.Dispose();
+            nativeY.Dispose();
+            nativeZ.Dispose();
 
             // Perform FFT operations.
             FastFourierTransform.Compute(dx, _textureSize, _reversedIndex);
