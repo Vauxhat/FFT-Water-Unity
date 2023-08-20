@@ -76,8 +76,8 @@ void ComputeStationary(uint2 id : SV_DispatchThreadID)
     float2 k;
 
     // Calculate the wave vector.
-    k.x = M_PI * (2.0f * id.x - _textureSize) / _patchSize;
-    k.y = M_PI * (2.0f * id.y - _textureSize) / _patchSize;
+    k.x = (2.0f * M_PI * (id.x - _textureSize * 0.5f)) / _patchSize;
+    k.y = (2.0f * M_PI * (id.y - _textureSize * 0.5f)) / _patchSize;
 
     // Calculate ~h0 and ~h*.
     float2 tildeH0 = _gaussianNoise[id].rg * sqrt(PhillipsSpectrum(k) * 0.5f);

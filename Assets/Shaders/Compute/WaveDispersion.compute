@@ -15,8 +15,8 @@ float _patchSize;
 void ComputeDispersion (uint2 id : SV_DispatchThreadID)
 {
     // Calculate x and y components of k vector.
-    float kx = M_PI * (2.0f * id.x - _textureSize) / _patchSize;
-    float ky = M_PI * (2.0f * id.y - _textureSize) / _patchSize;
+    float kx = (2.0f * M_PI * (id.x - _textureSize * 0.5f)) / _patchSize;
+    float ky = (2.0f * M_PI * (id.y - _textureSize * 0.5f)) / _patchSize;
 
     // Calculate the length of the wave vector.
     float kLength = sqrt(kx * kx + ky * ky);

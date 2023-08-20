@@ -29,8 +29,8 @@ float2 ComplexMultiply(float2 a, float2 b)
 void ComputeTimeSpectrum (uint2 id : SV_DispatchThreadID)
 {
     // Calculate x and y components of k vector.
-    float kx = M_PI * (2.0f * id.x - _textureSize) / _patchSize;
-    float ky = M_PI * (2.0f * id.y - _textureSize) / _patchSize;
+    float kx = (2.0f * M_PI * (id.x - _textureSize * 0.5f)) / _patchSize;
+    float ky = (2.0f * M_PI * (id.y - _textureSize * 0.5f)) / _patchSize;
 
     // Calculate wavelength of k vector.
     float wavelength = sqrt(kx * kx + ky * ky);
