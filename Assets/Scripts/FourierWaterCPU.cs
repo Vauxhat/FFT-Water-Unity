@@ -7,7 +7,8 @@ using Vauxhat;
 
 using Complex = System.Numerics.Complex;
 
-public class FourierWaterCPU : MonoBehaviour
+[System.Serializable]
+public class FourierWaterCPU
 {
     // Texture variables.
     public Texture2D _displacementTexture;
@@ -15,7 +16,7 @@ public class FourierWaterCPU : MonoBehaviour
 
     // Pre-computed wave variables. Only re-generate if necessary.
     private Complex[] _gaussianNoise;
-    private Complex[] _frequencySpectrum;
+    private Complex[] _stationarySpectrum;
     private float[] _waveDispersion;
     private int[] _reversedIndex;
 
@@ -25,13 +26,13 @@ public class FourierWaterCPU : MonoBehaviour
     [Min(0.0f)] public float _gravity = 9.81f;
     [Min(0.0f)] public int _patchSize = 16;
     [Min(0.0f)] public float _repeatTime = 200.0f;
-    [Min(0.0f)] public float _steepness = -1.0f;
+    [Min(0.0f)] public float _steepness = 0.0f;
     [Min(0.0f)] public float _minWavelength = 0.001f;
     [Min(0.0f)] public float _phillipsConstant = 0.0002f;
 
     // Private wave variables, used only in code.
     private Vector2 _windDirection;
-    private int _textureSize = 128;
+    public int _textureSize = 128;
 
     // Previous variable states, used to detect changes.
     private float _prevWindAngle = 0.0f;
@@ -42,13 +43,13 @@ public class FourierWaterCPU : MonoBehaviour
     private float _prevMinWavelength = 0.001f;
     private float _prevPhillipsConstant = 0.0002f;
 
-    private Material _material;
+    //private Material _material;
 
     // Start is called before the first frame update
-    void Start()
+    public void Initialise()
     {
         // Initialise gaussian noise.
-        InitialiseGaussianNoise();
+        //InitialiseGaussianNoise();
 
         // Pre-compute reversed index.
         _reversedIndex = FastFourierTransform.PrecomputeReversedIndex(_textureSize);
@@ -61,20 +62,17 @@ public class FourierWaterCPU : MonoBehaviour
         _windDirection = new Vector2(Mathf.Sin(Mathf.Deg2Rad * _windAngle), Mathf.Cos(Mathf.Deg2Rad * _windAngle));
 
         // Initialise frequency spectrum. Interweave ~h and ~h* for better locality.
-        _frequencySpectrum = new Complex[_textureSize * _textureSize * 2];
+        _stationarySpectrum = new Complex[_textureSize * _textureSize * 2];
         UpdateFrequencySpectrum();
 
         // Initialise displacement texture.
         _displacementTexture = new Texture2D(_textureSize, _textureSize, TextureFormat.RGBAHalf, false);
         _displacement = new Vector3[_textureSize * _textureSize];
-        UpdateDisplacement();
-
-        // Store local reference to material.
-        _material = this.gameObject.GetComponent<Renderer>().sharedMaterial;
+        UpdateDisplacement(Time.time);
     }
 
     // Update is called once per frame
-    void Update()
+    public void Update(float time)
     {
         // Check if gravity has been changed since last update.
         if (!Mathf.Approximately(_prevGravity, _gravity) || !Mathf.Approximately(_prevPatchSize, _patchSize) || !Mathf.Approximately(_prevRepeatTime, _repeatTime))
@@ -107,14 +105,7 @@ public class FourierWaterCPU : MonoBehaviour
         _prevPatchSize = _patchSize;
 
         // Update heightfield.
-        UpdateDisplacement();
-
-        // Check if material exists.
-        if (_material)
-        {
-            // Pass heightfield texture to material shader.
-            _material.SetTexture("_MainTex", _displacementTexture);
-        }
+        UpdateDisplacement(time);
     }
 
     private void InitialiseGaussianNoise()
@@ -197,16 +188,10 @@ public class FourierWaterCPU : MonoBehaviour
                 int index = 2 * (x + y * _textureSize);
 
                 // Calculate final value, sqrt(PhillipsSpectrum) and 1/sqrt(2) have been simplified into a single calculation.
-                _frequencySpectrum[index] = Mathf.Sqrt(CalculatePhillips(k) * 0.5f) * _gaussianNoise[index];
-                _frequencySpectrum[index + 1] = Complex.Conjugate(Mathf.Sqrt(CalculatePhillips(-k) * 0.5f) * _gaussianNoise[index + 1]);
-
-                // Calculate final output, apply to noise texture.
-                //_fourierTexture.SetPixel(x, y, new Color((float)_frequencySpectrum[index].Real, (float)_frequencySpectrum[index].Imaginary, 0.0f, 1.0f));
+                _stationarySpectrum[index] = Mathf.Sqrt(CalculatePhillips(k) * 0.5f) * _gaussianNoise[index];
+                _stationarySpectrum[index + 1] = Complex.Conjugate(Mathf.Sqrt(CalculatePhillips(-k) * 0.5f) * _gaussianNoise[index + 1]);
             }
         }
-
-        // Apply changes to texture.
-        //_fourierTexture.Apply();
     }
 
     private void UpdateWaveDispersion()
@@ -235,7 +220,7 @@ public class FourierWaterCPU : MonoBehaviour
                 if (kLength < scale)
                 {
                     // Modify dispersion relation, accomodate for surface tension.
-                    dispersion *= (1 + kLength * kLength * scale * scale);
+                    dispersion *= (1.0f + kLength * kLength * scale * scale);
                 }
 
                 // Extract dispersion (w) from squared value.
@@ -254,7 +239,7 @@ public class FourierWaterCPU : MonoBehaviour
     {
         // Input buffers.
         [ReadOnly] public NativeArray<float> _waveDispersion;
-        [ReadOnly] public NativeArray<Complex> _frequencySpectrum;
+        [ReadOnly] public NativeArray<Complex> _stationarySpectrum;
 
         // Output buffers.
         public NativeArray<Complex> _dx;
@@ -283,8 +268,8 @@ public class FourierWaterCPU : MonoBehaviour
             float exponent = _waveDispersion[index] * _time;
 
             // Calculate ~h0 and conjugate using stationary spectrum, seed based on time.
-            Complex tildeH0 = _frequencySpectrum[2 * index] * new Complex(Mathf.Cos(exponent), Mathf.Sin(exponent));
-            Complex tildeH0Conjugate = _frequencySpectrum[2 * index + 1] * new Complex(Mathf.Cos(exponent), Mathf.Sin(-exponent));
+            Complex tildeH0 = _stationarySpectrum[2 * index] * new Complex(Mathf.Cos(exponent), Mathf.Sin(exponent));
+            Complex tildeH0Conjugate = _stationarySpectrum[2 * index + 1] * new Complex(Mathf.Cos(exponent), Mathf.Sin(-exponent));
 
             // Calculate ~h from composite variables.
             Complex tildeH = tildeH0 + tildeH0Conjugate;
@@ -302,13 +287,13 @@ public class FourierWaterCPU : MonoBehaviour
             else
             {
                 // Set x and y components of time spectrum.
-                _dx[index] = tildeH * new Complex(0.0f, -1.0f * kx / wavelength);
-                _dz[index] = tildeH * new Complex(0.0f, -1.0f * ky / wavelength);
+                _dx[index] = tildeH * new Complex(0.0f, -kx / wavelength);
+                _dz[index] = tildeH * new Complex(0.0f, -ky / wavelength);
             }
         }
     }
 
-    private void UpdateDisplacement()
+    private void UpdateDisplacement(float time)
     {
         // Check if texture exists.
         if (_displacementTexture)
@@ -320,7 +305,7 @@ public class FourierWaterCPU : MonoBehaviour
 
             // Create native array for input data.
             NativeArray<float> nativeWaveDispersion = new NativeArray<float>(_waveDispersion.Length, Allocator.TempJob);
-            NativeArray<Complex> nativeFrequencySpectrum = new NativeArray<Complex>(_frequencySpectrum.Length, Allocator.TempJob);
+            NativeArray<Complex> nativeFrequencySpectrum = new NativeArray<Complex>(_stationarySpectrum.Length, Allocator.TempJob);
 
             // Create native array for output data.
             NativeArray<Complex> nativeX = new NativeArray<Complex>(_textureSize * _textureSize, Allocator.TempJob);
@@ -331,19 +316,19 @@ public class FourierWaterCPU : MonoBehaviour
             for (int i = 0; i < _waveDispersion.Length; i++)
             {
                 nativeWaveDispersion[i] = _waveDispersion[i];
-                nativeFrequencySpectrum[2 * i] = _frequencySpectrum[2 * i];
-                nativeFrequencySpectrum[2 * i + 1] = _frequencySpectrum[2 * i + 1];
+                nativeFrequencySpectrum[2 * i] = _stationarySpectrum[2 * i];
+                nativeFrequencySpectrum[2 * i + 1] = _stationarySpectrum[2 * i + 1];
             }
 
             // Create new job.
             TimeSpectrumJob job = new TimeSpectrumJob()
             {
                 _waveDispersion = nativeWaveDispersion,
-                _frequencySpectrum = nativeFrequencySpectrum,
+                _stationarySpectrum = nativeFrequencySpectrum,
                 _dx = nativeX,
                 _dy = nativeY,
                 _dz = nativeZ,
-                _time = Time.time,
+                _time = time,
                 _textureSize = _textureSize,
                 _patchSize = _patchSize,
             };
@@ -365,9 +350,11 @@ public class FourierWaterCPU : MonoBehaviour
                 dz[i] = nativeZ[i];
             }
 
-            // Dispose of native array structure.
+            // Dispose of input array structures.
             nativeWaveDispersion.Dispose();
             nativeFrequencySpectrum.Dispose();
+
+            // Dispose of output array structures.
             nativeX.Dispose();
             nativeY.Dispose();
             nativeZ.Dispose();
@@ -393,13 +380,13 @@ public class FourierWaterCPU : MonoBehaviour
                     float b = sign * (float)dz[x + y * _textureSize].Real * -1.0f * _steepness;
 
                     // Store output in displacement texture.
-                    _displacementTexture.SetPixel(x, y, new Color(r, g, b, 1.0f));
+                    //_displacementTexture.SetPixel(x, y, new Color(r, g, b, 1.0f));
                     _displacement[x + y * _textureSize] = new Vector3(r, g, b);
                 }
             }
 
             // Apply changes to texture.
-            _displacementTexture.Apply();
+            //_displacementTexture.Apply();
         }
     }
 
@@ -412,8 +399,9 @@ public class FourierWaterCPU : MonoBehaviour
 
         // Calculate minimum and maximum values for sample.
         int minX = (int)x;
-        int maxX = (minX + 1) % _textureSize;
         int minY = (int)y;
+
+        int maxX = (minX + 1) % _textureSize;
         int maxY = (minY + 1) % _textureSize;
 
         // Extract decimal value from sample coordinates, used for interpolation.
@@ -429,5 +417,10 @@ public class FourierWaterCPU : MonoBehaviour
 
         // Return sample as a vector.
         return new Vector3(sample.x, sample.y, sample.z);
+    }
+
+    public void SetGaussianNoise(Complex[] noiseTexture)
+    {
+        _gaussianNoise = noiseTexture;
     }
 }

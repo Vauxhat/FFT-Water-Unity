@@ -4,7 +4,7 @@ using UnityEngine;
 
 public class FloatingPhysics : MonoBehaviour
 {
-    public FourierWaterCPU _waterSimulator;
+    public OceanGenerator _waterSimulator;
     private Vector3 _worldPosition;
 
     private Vector3 _forward;

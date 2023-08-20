@@ -5,7 +5,8 @@ using Vauxhat;
 
 using Complex = System.Numerics.Complex;
 
-public class FourierWaterGPU : MonoBehaviour
+[System.Serializable]
+public class FourierWaterGPU
 {
     // Render textures, used by compute shaders.
     public RenderTexture[] _fourierBuffer;
@@ -31,8 +32,8 @@ public class FourierWaterGPU : MonoBehaviour
 
     // Public variables for handling wave simulation.
     [Range(0.0f, 360.0f)] public float _windAngle = 0.0f;
-    public float _windSpeed = 3.0f;
-    public float _gravity = 9.81f;
+    [Min(0.0f)] public float _windSpeed = 3.0f;
+    [Min(0.0f)] public float _gravity = 9.81f;
     [Min(0.0f)] public int _patchSize = 10;
     [Min(0.0f)] public float _repeatTime = 200.0f;
     [Min(0.0f)] public float _steepness = 0.0f;
@@ -41,7 +42,7 @@ public class FourierWaterGPU : MonoBehaviour
 
     // Private wave variables, used only in code.
     private Vector2 _windDirection;
-    private int _textureSize = 256;
+    public int _textureSize = 256;
 
     // Previous variable states, used to detect changes.
     private float _prevWindAngle = 0.0f;
@@ -52,13 +53,13 @@ public class FourierWaterGPU : MonoBehaviour
     private float _prevMinWavelength = 0.001f;
     private float _prevPhillipsConstant = 0.0002f;
 
-    private Material _material;
+    //private Material _material;
 
     // Start is called before the first frame update
-    void Start()
+    public void Initialise()
     {
         // Initialise gaussian noise.
-        InitialiseGaussianNoise();
+        //InitialiseGaussianNoise();
 
         // Initialse array of reversed indices.
         _reversedIndex = new int[_textureSize];
@@ -76,7 +77,7 @@ public class FourierWaterGPU : MonoBehaviour
         _windDirection = new Vector2(Mathf.Sin(Mathf.Deg2Rad * _windAngle), Mathf.Cos(Mathf.Deg2Rad * _windAngle));
 
         // Store local reference to material.
-        _material = this.gameObject.GetComponent<Renderer>().sharedMaterial;
+        //_material = this.gameObject.GetComponent<Renderer>().sharedMaterial;
 
         // Initialise butterfly texture.
         _butterflyTexture = new Texture2D(bits, _textureSize, TextureFormat.RGBAFloat, false);
@@ -196,7 +197,7 @@ public class FourierWaterGPU : MonoBehaviour
         _timeSpectrumShader.SetFloat(Shader.PropertyToID("_time"), Time.time);
 
         // Calculate initial time spectrum.
-        UpdateTimeSpectrum();
+        UpdateTimeSpectrum(Time.time);
     }
 
     private void InitialiseTextureMergeShader()
@@ -244,7 +245,7 @@ public class FourierWaterGPU : MonoBehaviour
     }
 
     // Update is called once per frame
-    void Update()
+    public void Update(float time)
     {
         // Check if gravity has been changed since last update.
         if (!Mathf.Approximately(_prevGravity, _gravity) || !Mathf.Approximately(_prevPatchSize, _patchSize) || !Mathf.Approximately(_prevRepeatTime, _repeatTime))
@@ -277,17 +278,17 @@ public class FourierWaterGPU : MonoBehaviour
         _prevPatchSize = _patchSize;
 
         // Update time-dependent spectrum.
-        UpdateTimeSpectrum();
+        UpdateTimeSpectrum(time);
 
         // Update heightfield.
         UpdateHeightfield();
 
         // Check if material exists.
-        if (_material)
-        {
-            // Pass heightfield texture to material shader.
-            _material.SetTexture("_MainTex", _displacement);
-        }
+        //if (_material)
+        //{
+        //    // Pass heightfield texture to material shader.
+        //    _material.SetTexture("_MainTex", _displacement);
+        //}
     }
 
     private void UpdateStationarySpectrum()
@@ -387,12 +388,12 @@ public class FourierWaterGPU : MonoBehaviour
         _butterflyTexture.Apply();
     }
 
-    private void UpdateTimeSpectrum()
+    private void UpdateTimeSpectrum(float time)
     {
         uint x, y, z;
 
         // Update shader variables.
-        _timeSpectrumShader.SetFloat(Shader.PropertyToID("_time"), Time.time);
+        _timeSpectrumShader.SetFloat(Shader.PropertyToID("_time"), time);
         _timeSpectrumShader.SetFloat(Shader.PropertyToID("_textureSize"), _textureSize);
         _timeSpectrumShader.SetFloat(Shader.PropertyToID("_patchSize"), _patchSize);
 
@@ -507,5 +508,16 @@ public class FourierWaterGPU : MonoBehaviour
 
         // Execute compute function.
         _textureMergeShader.Dispatch(normalIndex, (int)(_textureSize / x), (int)(_textureSize / y), 1);
+
+        // Workaround for texture rotation.
+        var temp = RenderTexture.GetTemporary(_displacement.descriptor);
+        Graphics.Blit(_displacement, temp, new Vector2(-1.0f, -1.0f), new Vector2(0.0f, 0.0f));
+        Graphics.Blit(temp, _displacement);
+        RenderTexture.ReleaseTemporary(temp);
+    }
+
+    public void SetGaussianNoise(Texture2D noiseTexture)
+    {
+        _gaussianNoise = noiseTexture;
     }
 }

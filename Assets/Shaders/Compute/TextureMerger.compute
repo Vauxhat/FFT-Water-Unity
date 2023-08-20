@@ -21,15 +21,15 @@ static const float signs[2] = { 1.0f, -1.0f };
 [numthreads(8,8,1)]
 void ComputeDisplacement(uint2 id : SV_DispatchThreadID)
 {
-    float3 displacement;
+    float3 displacement = float3(0.0f, 0.0f, 0.0f);
 
     // Get sign value for current pixel.
     float sign = signs[(id.x + id.y) % 2];
 
     // Calculate displacement based on FFT results, apply chop.
-    displacement.x = sign * _displacementX[id].x * _lambda;
-    displacement.y = sign * _displacementY[id].x;
-    displacement.z = sign * _displacementZ[id].x * _lambda;
+    displacement.x -= sign * _displacementX[id].x * _lambda;
+    displacement.y += sign * _displacementY[id].x;
+    displacement.z -= sign * _displacementZ[id].x * _lambda;
 
     // Store result in output texture.
     _displacement[id] = float4(displacement, 1.0f);
